@@ -1,0 +1,7 @@
+This is a repository for the code associated with assessing inbreeding depresssion in North Atlantic right whales using ddRADseq.
+
+scripts/
+- raw_reads_to_variant_calling/
+- variant_filtration/
+- fitness_calculations/
+- inbreeding_coefficients/
