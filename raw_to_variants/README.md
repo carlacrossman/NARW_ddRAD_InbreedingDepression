@@ -13,4 +13,4 @@
 - *08b_stacks_ref_gt0.001.sh*	Running the stacks_ref pipeline with alphas of 0.001
 
 
-![Fig1_workflow](/ddRAD_preprocessing_streamlined.png)
+![Fig1_workflow](https://github.com/carlacrossman/NARW_ddRAD_InbreedingDepression/blob/main/raw_to_variants/ddRAD_preprocessing_streamlined.png)
