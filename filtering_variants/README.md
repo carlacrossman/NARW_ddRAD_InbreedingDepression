@@ -16,4 +16,4 @@ The role of these scripts is outlined in the diagram below to produce 4 differen
 - *10c_stacks_filter_pt2.sh*	
 - *10d_stacks_dupsite_filter.sh*
 
-![Variant_Filtration](/ddRAD_variant_filtration_streamlined.png)
+![Variant_Filtration](https://github.com/carlacrossman/NARW_ddRAD_InbreedingDepression/blob/main/filtering_variants/ddRAD_variant_filtration_streamlined.png)
