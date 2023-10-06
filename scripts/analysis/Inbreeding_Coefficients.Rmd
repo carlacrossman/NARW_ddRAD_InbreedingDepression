@@ -1,0 +1,572 @@
+---
+title: "Inbreeding_Coefficients"
+author: "CCrossman"
+date: "19/05/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(inbreedR)
+library("devtools")
+library(vcfR)
+library(reshape2)
+library(gtools)
+library(data.table)
+library(reshape2)
+```
+
+I will be calculating a number of different inbreeding coefficients for each individual:
+
+1. IR (Amos - GENHET)
+2. HL (Arapicio - GENHET)
+3. ID g2 (InbreedR) (Population level statistic)
+4. sMLH (InbreedR)
+5. F (vcftools --het)
+6. FHBD (RZooRoH)
+
+### IR & HL
+
+IR and HL can both be calculated with the GENHET function written in R. GENHET was designed for microsatellite data and while it is being used for SNP data, it is unclear how people are preparing their input files. 
+
+GENHET requires a genotype file. I use bcftools query and a custom python script to produce the genotypes file. Here is the sample script that I repeat in the same way for the other datasets
+
+``` {bash}
+FILE=(FILTERED VCF FILE)
+DATASET=(DATASET NAME)
+
+
+bcftools query -f '%CHROM %POS  [ %GT]\n' $FILE > $DATASET_genhet_GT
+
+zcat $FILE | grep ^# | tail -1 > sample_name_line_$DATASET
+
+## Manually fix header line
+
+cat sample_name_line_stacks $DATASET_genhet_GT > $DATASET_genotypes.txt
+```
+
+
+In a jupyter notebook, I ran the following to generate the input file:
+```{python}
+# This was generated for each dataset, so the filenames should be changed accordingly.
+
+# Import Libraries
+import numpy as np
+import scipy
+import pandas as pd
+
+# Import Data File
+df = pd.read_csv("data/freebayesdp10_genotypes.txt", delim_whitespace=True)
+df["SITE"] = df['CHROM'].astype(str) +"_"+ df['POS'].astype(str)
+df.index = df["SITE"]
+df.drop(["CHROM", "POS", "SITE"], axis=1, inplace=True) 
+print(df)
+
+# Transpose Data Frame
+Genotype_condensed = df.T
+
+splits = [Genotype_condensed[col].str.split(pat='/', expand=True).add_prefix(col+"_") for col in Genotype_condensed.columns]
+clean_df = pd.concat(splits, axis=1)
+
+# Replace missing values
+numeric = {
+  ".": "NA" 
+}
+
+clean_df.replace(numeric, inplace=True)
+
+# Write data file
+clean_df.to_csv('freebayes_dp10_GT_formatted.tsv', sep = '\t')
+```
+
+Now I had a genotype file for each dataset.
+
+**Running GENHET**
+
+This was run for all datasets.
+
+```{r Running_GENHET}
+install.packages("data.table", repos="https://mirror.rcg.sfu.ca/mirror/CRAN/")
+install.packages("gtools", repos="https://mirror.rcg.sfu.ca/mirror/CRAN/")
+install.packages("tidyverse", repos="https://mirror.rcg.sfu.ca/mirror/CRAN/")
+
+library(tidyverse)
+library(gtools)
+library(data.table)
+
+#--- Load the GenHet code ---#
+source("GENHETv3.1.R")
+
+#--- Load the Genotypes Data File ---#
+data = fread("stacks001_GT_formatted.tsv", sep = "\t", header = TRUE)
+rownames(data) <- data$V1
+data <- as.data.frame(data)
+
+#--- Create list of loci ---#
+loci <- colnames(data)
+loci <- loci[-1]
+loci <- str_sub(loci, end = -3)
+list_loci <- unique(loci)
+
+Htest_stacks <- GENHET(dat = data, estimfreq="T", locname = list_loci)
+
+write.table(Htest_stacks, file="stacks001_genhet_results.txt", sep = "\t")
+```
+
+**Calculating HL from GENHET**
+
+```{r GENHET_HL}
+#--- Load genhet output ---#
+freebayesdp5_genhet <- read.table("freebayesdp5_genhet_results.txt", sep = "\t", header=TRUE)
+stacks01_genhet <- read.table("stacks01_genhet_results.txt", sep = "\t", header=TRUE)
+freebayesdp10_genhet <- read.table("freebayesdp10_genhet_results.txt", sep = "\t", header=TRUE)
+stacks001_genhet <- read.table("stacks001_genhet_results.txt", sep = "\t", header=TRUE)
+
+  
+HL_freebayesdp5 <- freebayesdp5_genhet[,c(1,6)]
+write.table(HL_freebayesdp5, file="results/freebayesdp5_HL.txt", sep = "\t")
+
+HL_freebayesdp10 <- freebayesdp10_genhet[,c(1,6)]
+write.table(HL_freebayesdp5, file="results/freebayesdp10_HL.txt", sep = "\t")
+
+HL_stacks01 <- stacks01_genhet[,c(1,6)]
+write.table(HL_stacks01, file="results/stacks01_HL.txt", sep = "\t")
+
+HL_stacks001 <- stacks001_genhet[,c(1,6)]
+write.table(HL_stacks001, file="results/stacks001_HL.txt", sep = "\t")
+
+
+```
+
+
+**Calculating IR with GENHET**
+
+```{r GENHET_IR}
+
+IR_freebayesdp5 <- freebayesdp5_genhet[,c(1,5)]
+write.table(IR_freebayesdp5, file="results/freebayesdp5_IR.txt", sep = "\t")
+
+IR_freebayesdp10 <- freebayesdp10_genhet[,c(1,5)]
+write.table(IR_freebayesdp10, file="results/freebayesdp10_IR.txt", sep = "\t")
+
+IR_stacks01 <- stacks01_genhet[,c(1,5)]
+write.table(IR_stacks01, file="results/stacks01_IR.txt", sep = "\t")
+
+IR_stacks001 <- stacks001_genhet[,c(1,5)]
+write.table(IR_stacks001, file="results/stacks001_IR.txt", sep = "\t")
+
+```
+
+### InbreedR
+
+**Loading data files**
+
+
+```{r InbreedR_load_data}
+#--- FREEBAYES dp10 ---#
+
+# Read VCF file
+vcf_freebayes <- read.vcfR("data/NARW_freebayes_biallelic_snps_unique_female_af_filtered_basic.recode.vcf", verbose = FALSE)
+
+# Extract genotypes, save as data frame and replace ./. as missing data
+gt_freebayes <- extract.gt(vcf_freebayes)
+gt_freebayes <- as.data.frame(t(gt_freebayes), stringsAsFactors = FALSE)
+gt_freebayes[gt_freebayes == "."] <- NA
+snp_geno_freebayes <- do.call(cbind, apply(gt_freebayes, 2, function(x) colsplit(x, "/", c("a","b"))))
+
+# Convert Data to INBREEDR input format
+freebayes_snp_genotypes <- inbreedR::convert_raw(snp_geno_freebayes)
+check_data(freebayes_snp_genotypes, num_ind=80)
+
+
+#--- FREEBAYES dp5 ---#
+
+# Read VCF file
+vcf_freebayes5 <- read.vcfR("data/NARW_freebayes_biallelic_snps_unique_female_af_filtered_dp5.recode.vcf", verbose = FALSE)
+
+# Extract genotypes, save as data frame and replace ./. as missing data
+gt_freebayes5 <- extract.gt(vcf_freebayes5)
+gt_freebayes5 <- as.data.frame(t(gt_freebayes5), stringsAsFactors = FALSE)
+gt_freebayes5[gt_freebayes5 == "."] <- NA
+snp_geno_freebayes5 <- do.call(cbind, apply(gt_freebayes5, 2, function(x) colsplit(x, "/", c("a","b"))))
+
+# Convert Data to INBREEDR input format
+freebayes5_snp_genotypes <- inbreedR::convert_raw(snp_geno_freebayes5)
+check_data(freebayes5_snp_genotypes, num_ind=89)
+
+#--- Stacks 0.01 ---#
+
+# Read VCF file
+vcf_stacks0.01 <- read.vcfR("data/NARW_stacks0.01_fully_filtered.vcf", verbose = FALSE)
+
+# Extract genotypes, save as data frame and replace ./. as missing data
+gt_stacks0.01 <- extract.gt(vcf_stacks0.01)
+gt_stacks0.01 <- as.data.frame(t(gt_stacks0.01), stringsAsFactors = FALSE)
+gt_stacks0.01[gt_stacks0.01 == "."] <- NA
+snp_geno_stacks0.01 <- do.call(cbind, apply(gt_stacks0.01, 2, function(x) colsplit(x, "/", c("a","b"))))
+
+# Convert Data to INBREEDR input format
+stacks0.01_snp_genotypes <- inbreedR::convert_raw(snp_geno_stacks0.01)
+check_data(stacks0.01_snp_genotypes, num_ind=93)
+
+
+#--- Stacks 0.001 ---#
+
+# Read VCF file
+vcf_stacks0.001 <- read.vcfR("data/NARW_stacks0.001_fully_filtered.vcf", verbose = FALSE)
+
+# Extract genotypes, save as data frame and replace ./. as missing data
+gt_stacks0.001 <- extract.gt(vcf_stacks0.001)
+gt_stacks0.001 <- as.data.frame(t(gt_stacks0.001), stringsAsFactors = FALSE)
+gt_stacks0.001[gt_stacks0.001 == "."] <- NA
+snp_geno_stacks0.001 <- do.call(cbind, apply(gt_stacks0.001, 2, function(x) colsplit(x, "/", c("a","b"))))
+
+# Convert Data to INBREEDR input format
+stacks0.001_snp_genotypes <- inbreedR::convert_raw(snp_geno_stacks0.001)
+check_data(stacks0.001_snp_genotypes, num_ind=93)
+
+
+```
+
+**Calculate g2**
+
+```{r InbreedR_ID}
+
+#--- FREEBAYES dp10 ---#
+
+# Calculate identity disequilibrium - population wide statistic
+
+g2_freebayes <- g2_snps(freebayes_snp_genotypes, nperm = 100, nboot = 100, CI = 0.95, parallel = FALSE, ncores = NULL)
+g2_freebayes
+
+# Plot bootstrap disequilibrium
+# plot(g2_freebayes, main = "Freebayes", col = "cornflowerblue", cex.axis = 0.85)
+
+# Heterozygosity-heterozygosity correlations
+HHC_freebayes <-HHC(freebayes_snp_genotypes, reps = 100)
+#HHC_freebayes
+
+# Plot HHC
+#plot(HHC_freebayes, main = "freebayes", col = "cornflowerblue", cex.axis = 0.85)
+
+# r2 between standardized multilocus heterozygosity (h) and inbreeding level (f)
+hf_freebayes <- r2_hf(genotypes = freebayes_snp_genotypes, type = "snps", nboot = 100)
+
+#--- FREEBAYES dp5 ---#
+
+# Calculate identity disequilibrium - population wide statistic
+
+g2_freebayes5 <- g2_snps(freebayes5_snp_genotypes, nperm = 100, nboot = 100, CI = 0.95, parallel = FALSE, ncores = NULL)
+g2_freebayes5
+
+# Plot bootstrap disequilibrium
+# plot(g2_freebayes, main = "Freebayes", col = "cornflowerblue", cex.axis = 0.85)
+
+# Heterozygosity-heterozygosity correlations
+HHC_freebayes5 <-HHC(freebayes5_snp_genotypes, reps = 100)
+#HHC_freebayes
+
+# Plot HHC
+#plot(HHC_freebayes, main = "freebayes", col = "cornflowerblue", cex.axis = 0.85)
+
+# r2 between standardized multilocus heterozygosity (h) and inbreeding level (f)
+hf_freebayes5 <- r2_hf(genotypes = freebayes5_snp_genotypes, type = "snps", nboot = 100)
+
+
+#--- STACKS 0.01 ---#
+
+# Calculate identity disequilibrium - population wide statistic
+
+g2_stacks0.01 <- g2_snps(stacks0.01_snp_genotypes, nperm = 100, nboot = 100, CI = 0.95, parallel = FALSE, ncores = NULL)
+g2_stacks0.01
+
+# Plot bootstrap disequilibrium
+# plot(g2_stacks0.01, main = "STACKS 0.01", col = "cornflowerblue", cex.axis = 0.85)
+
+# Heterozygosity-heterozygosity correlations
+HHC_stacks0.01 <-HHC(stacks0.01_snp_genotypes, reps = 100)
+#HHC_stacks0.01
+
+# Plot HHC
+#plot(HHC_stacks0.01, main = "STACKS 0.01", col = "cornflowerblue", cex.axis = 0.85)
+
+# r2 between standardized multilocus heterozygosity (h) and inbreeding level (f)
+hf_stacks0.01 <- r2_hf(genotypes = stacks0.01_snp_genotypes, type = "snps", nboot = 100)
+
+
+#--- STACKS 0.001 ---#
+
+# Calculate identity disequilibrium - population wide statistic
+
+g2_stacks0.001 <- g2_snps(stacks0.001_snp_genotypes, nperm = 100, nboot = 100, CI = 0.95, parallel = FALSE, ncores = NULL)
+g2_stacks0.001
+
+# Plot bootstrap disequilibrium
+# plot(g2_stacks0.001, main = "STACKS 0.001", col = "cornflowerblue", cex.axis = 0.85)
+
+# Heterozygosity-heterozygosity correlations
+HHC_stacks0.001 <-HHC(stacks0.001_snp_genotypes, reps = 100)
+#HHC_stacks0.001
+
+# Plot HHC
+#plot(HHC_stacks0.001, main = "STACKS 0.001", col = "cornflowerblue", cex.axis = 0.85)
+
+# r2 between standardized multilocus heterozygosity (h) and inbreeding level (f)
+hf_stacks0.001 <- r2_hf(genotypes = stacks0.001_snp_genotypes, type = "snps", nboot = 100)
+
+```
+
+## sMLH from InbreedR
+
+```{r InbreedR_sMLH}
+
+#--- FREEBAYES dp10 ---#
+
+freebayes_sMLH <- sMLH(freebayes_snp_genotypes)
+samples <- rownames(gt_freebayes)
+
+freebayes_sMLH_dataframe <- data.frame(samples, freebayes_sMLH)
+write.table(freebayes_sMLH_dataframe, file="results/freebayes_sMLH.txt", sep = "\t")
+
+
+#--- FREEBAYES dp5 ---#
+
+freebayes5_sMLH <- sMLH(freebayes5_snp_genotypes)
+samples5 <- rownames(gt_freebayes5)
+
+freebayes5_sMLH_dataframe <- data.frame(samples5, freebayes5_sMLH)
+write.table(freebayes5_sMLH_dataframe, file="results/freebayes5_sMLH.txt", sep = "\t")
+
+
+#--- STACKS 0.01 ---#
+
+stacks0.01_sMLH <- sMLH(stacks0.01_snp_genotypes)
+samples <- rownames(gt_stacks0.01)
+
+stacks0.01_sMLH_dataframe <- data.frame(samples, stacks0.01_sMLH)
+stacks0.01_sMLH_dataframe <- stacks0.01_sMLH_dataframe %>%
+  mutate(nea = substr(samples,1,7)) %>%
+  select(nea, stacks0.01_sMLH)
+  
+write.table(stacks0.01_sMLH_dataframe, file="results/stacks0.01_sMLH.txt", sep = "\t")
+
+#--- STACKS 0.001 ---#
+
+stacks0.001_sMLH <- sMLH(stacks0.001_snp_genotypes)
+samples <- rownames(gt_stacks0.001)
+
+stacks0.001_sMLH_dataframe <- data.frame(samples, stacks0.001_sMLH)
+stacks0.001_sMLH_dataframe <- stacks0.001_sMLH_dataframe %>%
+  mutate(nea = substr(samples,1,7)) %>%
+  select(nea, stacks0.001_sMLH)
+  
+write.table(stacks0.001_sMLH_dataframe, file="results/stacks0.001_sMLH.txt", sep = "\t")
+
+
+```
+
+
+## F from vcftools
+
+The F values calculated by VCFTOOLS represent the (number of expected Heterozygotes) - (number of observed heterozygotes) / (number of expected heterozygotes) within each individual.
+
+```{bash}
+
+module load vcftools/0.1.16
+
+vcftools --gzvcf NARW_freebayes_biallelic_snps_unique_female_af_filtered_basic.recode.vcf.gz --het --out freebayesdp10_vcftools_het
+
+vcftools --gzvcf NARW_freebayes_biallelic_snps_unique_female_af_filtered_dp5.recode.vcf.gz --het --out freebayesdp5_vcftools_het
+
+vcftools --gzvcf NARW_stacks0.01_fully_filtered.vcf.gz --het --out stacks0.01_vcftools_het
+
+vcftools --gzvcf NARW_stacks0.001_fully_filtered.vcf.gz --het --out stacks0.001_vcftools_het
+
+```
+
+```{r vcftools_F}
+# This imports the output from vcftools, and formats it to a tab delimited file that lists F for each individual
+
+#--- FREEBAYES dp5 ---#
+
+freebayes5_vcftools_F <- read.table("data/freebayesdp5_vcftools_het.het", header = TRUE)
+freebayes5_vcftools_F_subset <- freebayes5_vcftools_F %>%
+  select(INDV, F)
+
+write.table(freebayes5_vcftools_F_subset, file="results/freebayesdp5_vcftools_F.txt", sep = "\t")
+
+#--- FREEBAYES dp10 ---#
+
+freebayes_vcftools_F <- read.table("data/freebayesdp10_vcftools_het.het", header = TRUE)
+freebayes_vcftools_F_subset <- freebayes_vcftools_F %>%
+  select(INDV, F)
+
+write.table(freebayes_vcftools_F_subset, file="results/freebayesdp10_vcftools_F.txt", sep = "\t")
+
+#--- Stacks 0.01 ---#
+
+stacks0.01_vcftools_F <- read.table("data/stacks0.01_vcftools_het.het", header = TRUE)
+stacks0.01_vcftools_F_subset <- stacks0.01_vcftools_F %>%
+  select(INDV, F)
+
+write.table(stacks0.01_vcftools_F_subset, file="results/stacks0.01_vcftools_F.txt", sep = "\t")
+
+
+#--- Stacks 0.001 ---#
+
+stacks0.001_vcftools_F <- read.table("data/stacks0.001_vcftools_het.het", header = TRUE)
+stacks0.001_vcftools_F_subset <- stacks0.001_vcftools_F %>%
+  select(INDV, F)
+
+write.table(stacks0.001_vcftools_F_subset, file="results/stacks0.001_vcftools_F.txt", sep = "\t")
+
+```
+
+##FHBD
+
+Setting up input for RZooRoH
+```{bash}
+
+module load bcftools/1.16
+
+# Freebayes dp5
+
+bcftools convert -t ^HiC_scaffold_21 -g freebayesdp5_roh_input --3N6 --tag GT NARW_freebayes_biallelic_snps_unique_female_af_filtered_dp5.recode.vcf.gz
+zcat freebayesdp5_roh_input.gen.gz | sed -e 's,-nan,0,g' > freebayesdp5_rzooroh_input.gen
+
+
+# Freebayes dp10
+
+bcftools convert -t ^HiC_scaffold_21 -g freebayesdp10_roh_input --3N6 --tag GT NARW_freebayes_biallelic_snps_unique_female_af_filtered_basic.recode.vcf.gz
+zcat freebayesdp10_roh_input.gen.gz | sed -e 's,-nan,0,g' > freebayesdp10_rzooroh_input.gen
+
+
+# Stacks 0.01
+
+bcftools convert -t ^HiC_scaffold_21 -g stacks01_roh_input --3N6 --tag GT NARW_stacks0.01_fully_filtered.vcf.gz
+zcat stacks01_roh_input.gen.gz | sed -e 's,-nan,0,g' > stacks01_rzooroh_input.gen
+
+
+# Stacks 0.001
+
+bcftools convert -t ^HiC_scaffold_21 -g stacks001_roh_input --3N6 --tag GT NARW_stacks0.001_fully_filtered.vcf.gz
+zcat stacks001_roh_input.gen.gz | sed -e 's,-nan,0,g' > stacks001_rzooroh_input.gen
+
+```
+
+
+Running RZooRoH
+```{r Running RZooRoH}
+library("RZooRoH")
+
+# Load Data
+
+FB_dp5_data<-zoodata("freebayesdp5_rzooroh_input.gen", supcol=6, poscol=4, chrcol=1, zformat = "gp")
+
+FB_dp10_data<-zoodata("freebayesdp10_rzooroh_input.gen", supcol=6, poscol=4, chrcol=1, zformat = "gp")
+
+stacks0.01_data<-zoodata("stacks01_rzooroh_input.gen", supcol=6, poscol=4, chrcol=1, zformat = "gp")
+
+stacks0.001_data<-zoodata("stacks001_rzooroh_input.gen", supcol=6, poscol=4, chrcol=1, zformat = "gp")
+
+# Set up Models
+# error rate based on reproducibility in each dataset
+
+FBdp5_model <- zoomodel(K=11, err = 0.0002911)
+FBdp10_model <- zoomodel(K=11, err = 0.0001937)
+stacks01_model <- zoomodel(K=11, err = 0.00002578)
+stacks001_model <- zoomodel(K=11, err = 0.000006227)
+
+
+# Run Models
+loc_FBdp5 <- zoorun(FBdp5_model, FB_dp5_data, localhbd = TRUE, nT = 6)
+loc_FBdp10 <- zoorun(FBdp10_model, FB_dp10_data, localhbd = TRUE, nT = 6)
+loc_stacks01 <- zoorun(stacks01_model, stacks0.01_data, localhbd = TRUE, nT = 6)
+loc_stacks001 <- zoorun(stacks001_model, stacks0.001_data, localhbd = TRUE, nT = 6)
+
+# Save Files:
+
+write.csv(loc_FBdp5@hbdseg, "FB5_hbdseg.csv")
+write.csv(loc_FBdp10@hbdseg, "FB10_hbdseg.csv")
+write.csv(loc_stacks01@hbdseg, "stacks0.01_hbdseg.csv")
+write.csv(loc_stacks001@hbdseg, "stacks0.001_hbdseg.csv")
+
+write.csv(loc_FBdp5@realized, "FB5_realized.csv")
+write.csv(loc_FBdp10@realized, "FB10_realized.csv")
+write.csv(loc_stacks01@realized, "stacks0.01_realized.csv")
+write.csv(loc_stacks001@realized, "stacks0.001_realized.csv")
+
+write.csv(loc_FBdp5@modlik, "FB5_modlik.csv")
+write.csv(loc_FBdp10@modlik, "FB10_modlik.csv")
+write.csv(loc_stacks01@modlik, "stacks0.01_modlik.csv")
+write.csv(loc_stacks001@modlik, "stacks0.001_modlik.csv")
+```
+
+Calculating FHBD
+```{r RZooRoH_output_to_FHBD}
+# Load Sample Files
+FB5_samples <- read.table("freebayesdp5_roh_input.samples", header=TRUE)
+FB5_samples_list <- data.frame(nea = FB5_samples[2:nrow(FB5_samples),1], id = c(1:(nrow(FB5_samples)-1)))
+
+FB10_samples <- read.table("freebayesdp10_roh_input.samples", header=TRUE)
+FB10_samples_list <- data.frame(nea = FB10_samples[2:nrow(FB10_samples),1], id = c(1:(nrow(FB10_samples)-1)))
+
+stacks0.01_samples <- read.table("stacks01_roh_input.samples", header=TRUE)
+stacks0.01_samples_list <- data.frame(nea = stacks0.01_samples[2:nrow(stacks0.01_samples),1], id = c(1:(nrow(stacks0.01_samples)-1)))
+
+stacks0.001_samples <- read.table("stacks001_roh_input.samples", header=TRUE)
+stacks0.001_samples_list <- data.frame(nea = stacks0.001_samples[2:nrow(stacks0.001_samples),1], id = c(1:(nrow(stacks0.001_samples)-1)))
+
+
+# Load HBD Segment Files
+FB5_hbdseg <- read.csv("FB5_hbdseg.csv", header=TRUE)
+FB10_hbdseg <- read.csv("FB10_hbdseg.csv", header=TRUE)
+stacks0.01_hbdseg <- read.csv("stacks0.01_hbdseg.csv", header=TRUE)
+stacks0.001_hbdseg <- read.csv("stacks0.001_hbdseg.csv", header=TRUE)
+
+
+# Calculate the proportion of the genome found in HBD segments longer than 100Kb
+FB10_FHBD100kb <- FB10_hbdseg %>%
+  filter(length>100000) %>%
+  group_by(id) %>%
+  summarise(num_100kb = n(), totalLength = sum(length)) %>%
+  mutate(FROH = totalLength/2166782980)
+
+FB10_FHBD100kb_df <- left_join(FB10_FHBD100kb, FB10_samples_list, by = join_by(id))
+
+
+FB5_FHBD100kb <- FB5_hbdseg %>%
+  filter(length>100000) %>%
+  group_by(id) %>%
+  summarise(num_100kb = n(), totalLength = sum(length)) %>%
+  mutate(FROH = totalLength/2166782980)
+
+FB5_FHBD100kb_df <- left_join(FB5_FHBD100kb, FB5_samples_list, by = join_by(id))
+
+
+stacks0.01_FHBD100kb <- stacks0.01_hbdseg %>%
+  filter(length>100000) %>%
+  group_by(id) %>%
+  summarise(num_100kb = n(), totalLength = sum(length)) %>%
+  mutate(FROH = totalLength/2166782980)
+
+stacks0.01_FHBD100kb_df <- left_join(stacks0.01_FHBD100kb, stacks0.01_samples_list, by = join_by(id))
+
+
+stacks0.001_FHBD100kb <- stacks0.001_hbdseg %>%
+  filter(length>100000) %>%
+  group_by(id) %>%
+  summarise(num_100kb = n(), totalLength = sum(length)) %>%
+  mutate(FROH = totalLength/2166782980)
+
+stacks0.001_FHBD100kb_df <- left_join(stacks0.001_FHBD100kb, stacks0.001_samples_list, by = join_by(id))
+
+# Save FHBD100kb output files with FHBD for each individual
+
+write.table(FB5_FHBD100kb_df, "../results/FB5_FHBD100kb.txt", sep = "\t")
+write.table(FB10_FHBD100kb_df, "../results/FB10_FHBD100kb.txt", sep = "\t")
+write.table(stacks0.01_FHBD100kb_df, "../results/stacks0.01_FHBD100kb.txt", sep = "\t")
+write.table(stacks0.001_FHBD100kb_df, "../results/stacks0.001_FHBD100kb.txt", sep = "\t")
+```
+

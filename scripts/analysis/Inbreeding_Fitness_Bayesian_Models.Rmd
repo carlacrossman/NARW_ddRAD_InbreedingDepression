@@ -1,0 +1,1170 @@
+---
+title: "RW_ddRAD_BayesianModels"
+author: "CCrossman"
+date: "18/08/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rstan)
+library(ggplot2)
+library(tidyverse)
+library(ggridges)
+options(mc.cores = parallel::detectCores())
+```
+
+
+```{r Load Data Files}
+#-----------------------#
+# Read the data into R  #
+#-----------------------#
+source("plotPost.R")
+
+delifing_fitness <- read.table("ddRAD_delifing_fitness.txt", sep = "\t")
+
+delifing_fitness <- delifing_fitness %>%
+  mutate(nea = paste0("nea", nea))
+
+#--- FREEBAYES dp5---#
+
+### sMLH
+freebayes5_sMLH <- read.table("freebayes5_sMLH.txt", sep = "\t")
+
+# remove D from some sample names
+freebayes5_sMLH <- freebayes5_sMLH %>%
+  mutate(nea = substr(samples5,1,7), sMLH = freebayes5_sMLH) %>%
+  select(nea, sMLH)
+
+### vcftools F  
+freebayes5_vcftools_F <- read.table("freebayesdp5_vcftools_F.txt", sep = "\t")
+
+# remove D from some sample names
+freebayes5_vcftools_F <- freebayes5_vcftools_F %>%
+  mutate(nea = substr(INDV,1,7)) %>%
+  select(nea, F)
+
+### HL
+freebayes5_data_HL <- read.table("freebayesdp5_HL.txt", sep = "\t")
+freebayes5_HL <- freebayes5_data_HL %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, HL)
+
+
+### IR
+freebayes5_data_IR <- read.table("freebayesdp5_IR.txt", sep = "\t")
+freebayes5_IR <- freebayes5_data_IR %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, IR)
+
+### FHBD
+fb5_FHBD <- read.table("FB5_FHBD100kb.txt", sep = "\t")
+fb5_FHBD <- fb5_FHBD %>%
+  mutate(nea = substr(nea,1,7)) %>%
+  select(nea, FHBD = FROH, num_100kb)
+
+
+#--- FREEBAYES dp10---#
+
+### sMLH
+freebayes_sMLH <- read.table("freebayes_sMLH.txt", sep = "\t")
+
+# remove D from some sample names
+freebayes_sMLH <- freebayes_sMLH %>%
+  mutate(nea = substr(samples,1,7), sMLH = freebayes_sMLH) %>%
+  select(nea, sMLH)
+
+### vcftools F  
+freebayes10_vcftools_F <- read.table("freebayesdp10_vcftools_F.txt", sep = "\t")
+
+# remove D from some sample names
+freebayes10_vcftools_F <- freebayes10_vcftools_F %>%
+  mutate(nea = substr(INDV,1,7)) %>%
+  select(nea, F)
+
+### HL
+freebayes_data_HL <- read.table("freebayesdp10_HL.txt", sep = "\t")
+freebayes_HL <- freebayes_data_HL %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, HL)
+
+
+### IR
+freebayes_data_IR <- read.table("freebayesdp10_IR.txt", sep = "\t")
+freebayes_IR <- freebayes_data_IR %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, IR)
+
+### FHBD
+fb10_FHBD <- read.table("FB10_FHBD100kb.txt", sep = "\t")
+fb10_FHBD <- fb10_FHBD %>%
+  mutate(nea = substr(nea,1,7)) %>%
+  select(nea, FHBD = FROH, num_100kb)
+
+
+#--- STACKS 0.01 ---#
+
+### sMLH
+stacks0.01_sMLH <- read.table("stacks0.01_sMLH.txt", sep = "\t")
+
+# remove D from some sample names
+stacks0.01_sMLH <- stacks0.01_sMLH %>%
+  mutate(sMLH = stacks0.01_sMLH) %>%
+  select(nea, sMLH)
+
+### vcftools F  
+stacks0.01_vcftools_F <- read.table("stacks0.01_vcftools_F.txt", sep = "\t")
+
+# remove D from some sample names
+stacks0.01_vcftools_F <- stacks0.01_vcftools_F %>%
+  mutate(nea = substr(INDV,1,7)) %>%
+  select(nea, F)
+
+
+### HL
+stacks01_data_HL <- read.table("stacks01_HL.txt", sep = "\t")
+stacks01_HL <- stacks01_data_HL %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, HL)
+
+
+### IR
+stacks01_data_IR <- read.table("stacks01_IR.txt", sep = "\t")
+stacks01_IR <- stacks01_data_IR %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, IR)
+
+### FHBD
+stacks0.01_FHBD <- read.table("stacks0.01_FHBD100kb.txt", sep = "\t")
+stacks0.01_FHBD <- stacks0.01_FHBD %>%
+  mutate(nea = substr(nea,1,7)) %>%
+  select(nea, FHBD = FROH, num_100kb)
+
+
+#--- STACKS 0.001 ---#
+
+### sMLH
+stacks0.001_sMLH <- read.table("stacks0.001_sMLH.txt", sep = "\t")
+
+# remove D from some sample names
+stacks0.001_sMLH <- stacks0.001_sMLH %>%
+  mutate(sMLH = stacks0.001_sMLH) %>%
+  select(nea, sMLH)
+
+### vcftools F  
+stacks0.001_vcftools_F <- read.table("stacks0.001_vcftools_F.txt", sep = "\t")
+
+# remove D from some sample names
+stacks0.001_vcftools_F <- stacks0.001_vcftools_F %>%
+  mutate(nea = substr(INDV,1,7)) %>%
+  select(nea, F)
+
+
+### HL
+stacks001_data_HL <- read.table("stacks001_HL.txt", sep = "\t")
+stacks001_HL <- stacks001_data_HL %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, HL)
+
+
+### IR
+stacks001_data_IR <- read.table("stacks001_IR.txt", sep = "\t")
+stacks001_IR <- stacks001_data_IR %>%
+  mutate(nea = substr(sampleid,1,7)) %>%
+  select(nea, IR)
+
+### FHBD
+stacks0.001_FHBD <- read.table("stacks0.001_FHBD100kb.txt", sep = "\t")
+stacks0.001_FHBD <- stacks0.001_FHBD %>%
+  mutate(nea = substr(nea,1,7)) %>%
+  select(nea, FHBD = FROH, num_100kb)
+
+```
+
+```{r merged_datasets}
+
+#--- Create merged datasets ---#
+freebayes_fitness_sMLH <- inner_join(delifing_fitness, freebayes_sMLH, by = "nea")
+freebayes5_fitness_sMLH <- inner_join(delifing_fitness, freebayes5_sMLH, by = "nea")
+stacks01_fitness_sMLH <- inner_join(delifing_fitness, stacks0.01_sMLH, by = "nea")
+stacks001_fitness_sMLH <- inner_join(delifing_fitness, stacks0.001_sMLH, by = "nea")
+
+freebayes_fitness_F <- inner_join(delifing_fitness, freebayes10_vcftools_F, by = "nea")
+freebayes5_fitness_F <- inner_join(delifing_fitness, freebayes5_vcftools_F, by = "nea")
+stacks01_fitness_F <- inner_join(delifing_fitness, stacks0.01_vcftools_F, by = "nea")
+stacks001_fitness_F <- inner_join(delifing_fitness, stacks0.001_vcftools_F, by = "nea")
+
+freebayes_fitness_HBD <- inner_join(delifing_fitness, fb10_FHBD, by = "nea")
+freebayes5_fitness_HBD <- inner_join(delifing_fitness, fb5_FHBD, by = "nea")
+stacks01_fitness_HBD <- inner_join(delifing_fitness, stacks0.01_FHBD, by = "nea")
+stacks001_fitness_HBD <- inner_join(delifing_fitness, stacks0.001_FHBD, by = "nea")
+
+freebayes_fitness_HL <- inner_join(delifing_fitness, freebayes_HL, by = "nea")
+freebayes5_fitness_HL <- inner_join(delifing_fitness, freebayes5_HL, by = "nea")
+stacks01_fitness_HL <- inner_join(delifing_fitness, stacks01_HL, by = "nea")
+stacks001_fitness_HL <- inner_join(delifing_fitness, stacks001_HL, by = "nea")
+
+freebayes_fitness_IR <- inner_join(delifing_fitness, freebayes_IR, by = "nea")
+freebayes5_fitness_IR <- inner_join(delifing_fitness, freebayes5_IR, by = "nea")
+stacks01_fitness_IR <- inner_join(delifing_fitness, stacks01_IR, by = "nea")
+stacks001_fitness_IR <- inner_join(delifing_fitness, stacks001_IR, by = "nea")
+
+```
+
+```{r model_setup_stacks001}
+#-------------------------------#
+# Create vector of standardized #
+# metric data                   #
+#-------------------------------#
+
+fitness_stacks001_HBD = stacks001_fitness_HBD$mean_fecundity
+zfitness_stacks001_HBD = (fitness_stacks001_HBD - mean(fitness_stacks001_HBD)) / sd(fitness_stacks001_HBD)
+N_stacks001_HBD = length(fitness_stacks001_HBD)
+
+fitness_stacks001_F = stacks001_fitness_F$mean_fecundity
+zfitness_stacks001_F = (fitness_stacks001_F - mean(fitness_stacks001_F)) / sd(fitness_stacks001_F)
+N_stacks001_F = length(fitness_stacks001_F)
+
+fitness_stacks001_HL = stacks001_fitness_HL$mean_fecundity
+zfitness_stacks001_HL = (fitness_stacks001_HL - mean(fitness_stacks001_HL)) / sd(fitness_stacks001_HL)
+N_stacks001_HL = length(fitness_stacks001_HL)
+
+fitness_stacks001_IR = stacks001_fitness_IR$mean_fecundity
+zfitness_stacks001_IR = (fitness_stacks001_IR - mean(fitness_stacks001_IR)) / sd(fitness_stacks001_IR)
+N_stacks001_IR = length(fitness_stacks001_IR)
+
+fitness_stacks001_sMLH = stacks001_fitness_sMLH$mean_fecundity
+zfitness_stacks001_sMLH = (fitness_stacks001_sMLH - mean(fitness_stacks001_sMLH)) / sd(fitness_stacks001_sMLH)
+N_stacks001_sMLH = length(fitness_stacks001_sMLH)
+
+#--- Standardize inbreeding variables ---#
+stacks001_HBD     = stacks001_fitness_HBD$FHBD
+stacks001_zHBD    = (stacks001_HBD - mean(stacks001_HBD)) / sd(stacks001_HBD)
+
+stacks001_sMLH     = stacks001_fitness_sMLH$sMLH
+stacks001_zsMLH    = (stacks001_sMLH - mean(stacks001_sMLH)) / sd(stacks001_sMLH)
+
+stacks001_F     = stacks001_fitness_F$F
+stacks001_zF    = (stacks001_F - mean(stacks001_F)) / sd(stacks001_F)
+
+stacks001_IR     = stacks001_fitness_IR$IR
+stacks001_zIR    = (stacks001_IR - mean(stacks001_IR)) / sd(stacks001_IR)
+
+stacks001_HL     = stacks001_fitness_HL$HL
+stacks001_zHL    = (stacks001_HL - mean(stacks001_HL)) / sd(stacks001_HL)
+
+
+#-----------------------------#
+# Create a data list for STAN #
+#-----------------------------#
+dataList_stacks001_HBD = list(
+  fitness = zfitness_stacks001_HBD,
+  N = N_stacks001_HBD,
+  IBC = stacks001_zHBD
+)
+
+dataList_stacks001_F = list(
+  fitness = zfitness_stacks001_F,
+  N = N_stacks001_F,
+  IBC = stacks001_zF
+)
+
+dataList_stacks001_sMLH = list(
+  fitness = zfitness_stacks001_sMLH,
+  N = N_stacks001_sMLH,
+  IBC = stacks001_zsMLH
+)
+
+dataList_stacks001_HL = list(
+  fitness = zfitness_stacks001_HL,
+  N = N_stacks001_HL,
+  IBC = stacks001_zHL
+)
+
+dataList_stacks001_IR = list(
+  fitness = zfitness_stacks001_IR,
+  N = N_stacks001_IR,
+  IBC = stacks001_zIR
+)
+```
+
+```{r model_setup_stacks01}
+#-------------------------------#
+# Create vector of standardized #
+# metric data                   #
+#-------------------------------#
+
+fitness_stacks01_HBD = stacks01_fitness_HBD$mean_fecundity
+zfitness_stacks01_HBD    = (fitness_stacks01_HBD - mean(fitness_stacks01_HBD)) / sd(fitness_stacks01_HBD)
+N_stacks01_HBD = length(fitness_stacks01_HBD)
+
+fitness_stacks01_F = stacks01_fitness_F$mean_fecundity
+zfitness_stacks01_F    = (fitness_stacks01_F - mean(fitness_stacks01_F)) / sd(fitness_stacks01_F)
+N_stacks01_F = length(fitness_stacks01_F)
+
+fitness_stacks01_HL = stacks01_fitness_HL$mean_fecundity
+zfitness_stacks01_HL    = (fitness_stacks01_HL - mean(fitness_stacks01_HL)) / sd(fitness_stacks01_HL)
+N_stacks01_HL = length(fitness_stacks01_HL)
+
+fitness_stacks01_IR = stacks01_fitness_IR$mean_fecundity
+zfitness_stacks01_IR    = (fitness_stacks01_IR - mean(fitness_stacks01_IR)) / sd(fitness_stacks01_IR)
+N_stacks01_IR = length(fitness_stacks01_IR)
+
+fitness_stacks01_sMLH = stacks01_fitness_sMLH$mean_fecundity
+zfitness_stacks01_sMLH    = (fitness_stacks01_sMLH - mean(fitness_stacks01_sMLH)) / sd(fitness_stacks01_sMLH)
+N_stacks01_sMLH = length(fitness_stacks01_sMLH)
+
+#--- Standardize inbreeding variables ---#
+stacks01_HBD     = stacks01_fitness_HBD$FHBD
+stacks01_zHBD    = (stacks01_HBD - mean(stacks01_HBD)) / sd(stacks01_HBD)
+
+stacks01_sMLH     = stacks01_fitness_sMLH$sMLH
+stacks01_zsMLH    = (stacks01_sMLH - mean(stacks01_sMLH)) / sd(stacks01_sMLH)
+
+stacks01_F     = stacks01_fitness_F$F
+stacks01_zF    = (stacks01_F - mean(stacks01_F)) / sd(stacks01_F)
+
+stacks01_IR     = stacks01_fitness_IR$IR
+stacks01_zIR    = (stacks01_IR - mean(stacks01_IR)) / sd(stacks01_IR)
+
+stacks01_HL     = stacks01_fitness_HL$HL
+stacks01_zHL    = (stacks01_HL - mean(stacks01_HL)) / sd(stacks01_HL)
+
+
+#-----------------------------#
+# Create a data list for STAN #
+#-----------------------------#
+dataList_stacks01_HBD = list(
+  fitness = zfitness_stacks01_HBD,
+  N = N_stacks01_HBD,
+  IBC = stacks01_zHBD
+)
+
+dataList_stacks01_F = list(
+  fitness = zfitness_stacks01_F,
+  N = N_stacks01_F,
+  IBC = stacks01_zF
+)
+
+dataList_stacks01_sMLH = list(
+  fitness = zfitness_stacks01_sMLH,
+  N = N_stacks01_sMLH,
+  IBC = stacks01_zsMLH
+)
+
+dataList_stacks01_HL = list(
+  fitness = zfitness_stacks01_HL,
+  N = N_stacks01_HL,
+  IBC = stacks01_zHL
+)
+
+dataList_stacks01_IR = list(
+  fitness = zfitness_stacks01_IR,
+  N = N_stacks01_IR,
+  IBC = stacks01_zIR
+)
+```
+
+```{r model_setup_FB5}
+#-------------------------------#
+# Create vector of standardized #
+# metric data                   #
+#-------------------------------#
+
+fitness_freebayes5_HBD = freebayes5_fitness_HBD$mean_fecundity
+zfitness_freebayes5_HBD    = (fitness_freebayes5_HBD - mean(fitness_freebayes5_HBD)) / sd(fitness_freebayes5_HBD)
+N_freebayes5_HBD = length(fitness_freebayes5_HBD)
+
+fitness_freebayes5_F = freebayes5_fitness_F$mean_fecundity
+zfitness_freebayes5_F    = (fitness_freebayes5_F - mean(fitness_freebayes5_F)) / sd(fitness_freebayes5_F)
+N_freebayes5_F = length(fitness_freebayes5_F)
+
+fitness_freebayes5_HL = freebayes5_fitness_HL$mean_fecundity
+zfitness_freebayes5_HL    = (fitness_freebayes5_HL - mean(fitness_freebayes5_HL)) / sd(fitness_freebayes5_HL)
+N_freebayes5_HL = length(fitness_freebayes5_HL)
+
+fitness_freebayes5_IR = freebayes5_fitness_IR$mean_fecundity
+zfitness_freebayes5_IR    = (fitness_freebayes5_IR - mean(fitness_freebayes5_IR)) / sd(fitness_freebayes5_IR)
+N_freebayes5_IR = length(fitness_freebayes5_IR)
+
+fitness_freebayes5_sMLH = freebayes5_fitness_sMLH$mean_fecundity
+zfitness_freebayes5_sMLH    = (fitness_freebayes5_sMLH - mean(fitness_freebayes5_sMLH)) / sd(fitness_freebayes5_sMLH)
+N_freebayes5_sMLH = length(fitness_freebayes5_sMLH)
+
+#--- Standardize inbreeding variables ---#
+freebayes5_HBD     = freebayes5_fitness_HBD$FHBD
+freebayes5_zHBD    = (freebayes5_HBD - mean(freebayes5_HBD)) / sd(freebayes5_HBD)
+
+freebayes5_sMLH     = freebayes5_fitness_sMLH$sMLH
+freebayes5_zsMLH    = (freebayes5_sMLH - mean(freebayes5_sMLH)) / sd(freebayes5_sMLH)
+
+freebayes5_F     = freebayes5_fitness_F$F
+freebayes5_zF    = (freebayes5_F - mean(freebayes5_F)) / sd(freebayes5_F)
+
+freebayes5_IR     = freebayes5_fitness_IR$IR
+freebayes5_zIR    = (freebayes5_IR - mean(freebayes5_IR)) / sd(freebayes5_IR)
+
+freebayes5_HL     = freebayes5_fitness_HL$HL
+freebayes5_zHL    = (freebayes5_HL - mean(freebayes5_HL)) / sd(freebayes5_HL)
+
+
+#-----------------------------#
+# Create a data list for STAN #
+#-----------------------------#
+dataList_freebayes5_HBD = list(
+  fitness = zfitness_freebayes5_HBD,
+  N = N_freebayes5_HBD,
+  IBC = freebayes5_zHBD
+)
+
+dataList_freebayes5_F = list(
+  fitness = zfitness_freebayes5_F,
+  N = N_freebayes5_F,
+  IBC = freebayes5_zF
+)
+
+dataList_freebayes5_sMLH = list(
+  fitness = zfitness_freebayes5_sMLH,
+  N = N_freebayes5_sMLH,
+  IBC = freebayes5_zsMLH
+)
+
+dataList_freebayes5_HL = list(
+  fitness = zfitness_freebayes5_HL,
+  N = N_freebayes5_HL,
+  IBC = freebayes5_zHL
+)
+
+dataList_freebayes5_IR = list(
+  fitness = zfitness_freebayes5_IR,
+  N = N_freebayes5_IR,
+  IBC = freebayes5_zIR
+)
+```
+
+```{r model_setup_FB10}
+#-------------------------------#
+# Create vector of standardized #
+# metric data                   #
+#-------------------------------#
+
+fitness_freebayes_HBD = freebayes_fitness_HBD$mean_fecundity
+zfitness_freebayes_HBD    = (fitness_freebayes_HBD - mean(fitness_freebayes_HBD)) / sd(fitness_freebayes_HBD)
+N_freebayes_HBD = length(fitness_freebayes_HBD)
+
+fitness_freebayes_F = freebayes_fitness_F$mean_fecundity
+zfitness_freebayes_F    = (fitness_freebayes_F - mean(fitness_freebayes_F)) / sd(fitness_freebayes_F)
+N_freebayes_F = length(fitness_freebayes_F)
+
+fitness_freebayes_HL = freebayes_fitness_HL$mean_fecundity
+zfitness_freebayes_HL    = (fitness_freebayes_HL - mean(fitness_freebayes_HL)) / sd(fitness_freebayes_HL)
+N_freebayes_HL = length(fitness_freebayes_HL)
+
+fitness_freebayes_IR = freebayes_fitness_IR$mean_fecundity
+zfitness_freebayes_IR    = (fitness_freebayes_IR - mean(fitness_freebayes_IR)) / sd(fitness_freebayes_IR)
+N_freebayes_IR = length(fitness_freebayes_IR)
+
+fitness_freebayes_sMLH = freebayes_fitness_sMLH$mean_fecundity
+zfitness_freebayes_sMLH    = (fitness_freebayes_sMLH - mean(fitness_freebayes_sMLH)) / sd(fitness_freebayes_sMLH)
+N_freebayes_sMLH = length(fitness_freebayes_sMLH)
+
+#--- Standardize inbreeding variables ---#
+freebayes_HBD     = freebayes_fitness_HBD$FHBD
+freebayes_zHBD    = (freebayes_HBD - mean(freebayes_HBD)) / sd(freebayes_HBD)
+
+freebayes_sMLH     = freebayes_fitness_sMLH$sMLH
+freebayes_zsMLH    = (freebayes_sMLH - mean(freebayes_sMLH)) / sd(freebayes_sMLH)
+
+freebayes_F     = freebayes_fitness_F$F
+freebayes_zF    = (freebayes_F - mean(freebayes_F)) / sd(freebayes_F)
+
+freebayes_IR     = freebayes_fitness_IR$IR
+freebayes_zIR    = (freebayes_IR - mean(freebayes_IR)) / sd(freebayes_IR)
+
+freebayes_HL     = freebayes_fitness_HL$HL
+freebayes_zHL    = (freebayes_HL - mean(freebayes_HL)) / sd(freebayes_HL)
+
+
+#-----------------------------#
+# Create a data list for STAN #
+#-----------------------------#
+dataList_freebayes_HBD = list(
+  fitness = zfitness_freebayes_HBD,
+  N = N_freebayes_HBD,
+  IBC = freebayes_zHBD
+)
+
+dataList_freebayes_F = list(
+  fitness = zfitness_freebayes_F,
+  N = N_freebayes_F,
+  IBC = freebayes_zF
+)
+
+dataList_freebayes_sMLH = list(
+  fitness = zfitness_freebayes_sMLH,
+  N = N_freebayes_sMLH,
+  IBC = freebayes_zsMLH
+)
+
+dataList_freebayes_HL = list(
+  fitness = zfitness_freebayes_HL,
+  N = N_freebayes_HL,
+  IBC = freebayes_zHL
+)
+
+dataList_freebayes_IR = list(
+  fitness = zfitness_freebayes_IR,
+  N = N_freebayes_IR,
+  IBC = freebayes_zIR
+)
+```
+
+```{r defining_model}
+
+#-----------------------------#
+# Define the model and write  #
+# a string for Stan which     #
+# should work for all models  #
+#-----------------------------#
+modelstring = "
+  data {
+    int N;                   // Sample size
+    vector[N] IBC;          // Vector of inbreeding coefficient (IBC)
+    vector[N] fitness;       // Vector of fitness
+  }
+
+  parameters {
+    real b0;              
+    real bIBC;                    // Coefficient for effect of IBC
+    real<lower=0> sigma;          // Coefficients for overall sd
+  }
+
+  model {
+    // Definitions
+    vector[N] mu;
+
+    // Likelihood
+    for (i in 1:N) {
+        mu[i] = b0 + bIBC*IBC[i];
+        fitness[i] ~ normal(mu[i], sigma);  // Using Cauchy distribution because I expect random life
+                                            // events could create a lot of variation in fitness
+    }
+
+    // Priors
+    b0 ~ normal(0, 1);
+    bIBC ~ normal(0, 1);    // Using a cauchy distribution because different 
+                            // life histories could create a lot of variation in fitness
+    sigma ~ normal(1, 1);
+    
+  }
+
+  generated quantities {
+    // Posterior Predictive Variable Definitions
+    vector[N] mu_pred;
+    vector[N] fitness_pred;
+
+    // For Posterior Predictive Calculations
+    for (i in 1:N) {
+    mu_pred[i] = b0 + bIBC*IBC[i];
+    fitness_pred[i] = normal_rng(mu_pred[i], sigma);
+    }
+
+  }
+"
+writeLines(modelstring, con = "results/stan_models/model_IBC_fitness.stan")
+```
+
+```{r run_stacks001_models}
+#--------------------------#
+#     run STAN             #
+#--------------------------#
+stanFit_stacks001_IR <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks001_IR, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks001_IR), "results/stan_models/stacks001_IR_model.csv")
+
+
+stanFit_stacks001_HL <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks001_HL, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks001_HL), "results/stan_models/stacks001_HL_model.csv")
+
+stanFit_stacks001_F <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks001_F, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks001_F), "results/stan_models/stacks001_F_model.csv")
+
+stanFit_stacks001_sMLH <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks001_sMLH, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks001_sMLH), "results/stan_models/stacks001_sMLH_model.csv")
+
+stanFit_stacks001_HBD <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks001_HBD, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks001_HBD), "results/stan_models/stacks001_HBD_model.csv")
+```
+
+```{r run_stacks01_models}
+#--------------------------#
+#     run STAN             #
+#--------------------------#
+stanFit_stacks01_IR <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks01_IR, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks01_IR), "results/stan_models/stacks01_IR_model.csv")
+
+
+stanFit_stacks01_HL <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks01_HL, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks01_HL), "results/stan_models/stacks01_HL_model.csv")
+
+stanFit_stacks01_F <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks01_F, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks01_F), "results/stan_models/stacks01_F_model.csv")
+
+stanFit_stacks01_sMLH <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks01_sMLH, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks01_sMLH), "results/stan_models/stacks01_sMLH_model.csv")
+
+stanFit_stacks01_HBD <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_stacks01_HBD, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_stacks01_HBD), "results/stan_models/stacks01_HBD_model.csv")
+```
+
+```{r run_freebayes10_models}
+#--------------------------#
+#     run STAN             #
+#--------------------------#
+stanFit_freebayes10_IR <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes_IR, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes10_IR), "results/stan_models/freebayes10_IR_model.csv")
+
+
+stanFit_freebayes10_HL <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes_HL, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes10_HL), "results/stan_models/freebayes10_HL_model.csv")
+
+stanFit_freebayes10_F <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes_F, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes10_F), "results/stan_models/freebayes10_F_model.csv")
+
+stanFit_freebayes10_sMLH <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes_sMLH, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes10_sMLH), "results/stan_models/freebayes10_sMLH_model.csv")
+
+stanFit_freebayes10_HBD <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes_HBD, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes10_HBD), "results/stan_models/freebayes10_HBD_model.csv")
+```
+
+```{r run_freebayes5_models}
+#--------------------------#
+#     run STAN             #
+#--------------------------#
+stanFit_freebayes5_IR <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes5_IR, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes5_IR), "results/stan_models/freebayes5_IR_model.csv")
+
+
+stanFit_freebayes5_HL <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes5_HL, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes5_HL), "results/stan_models/freebayes5_HL_model.csv")
+
+stanFit_freebayes5_F <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes5_F, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes5_F), "results/stan_models/freebayes5_F_model.csv")
+
+stanFit_freebayes5_sMLH <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes5_sMLH, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes5_sMLH), "results/stan_models/freebayes5_sMLH_model.csv")
+
+stanFit_freebayes5_HBD <- stan(file = "results/stan_models/model_IBC_fitness.stan", 
+                data = dataList_freebayes5_HBD, 
+                pars = c("b0", "bIBC", "sigma", "fitness_pred", "mu_pred"),
+                warmup = 2000,
+                iter = 12000, 
+                chains = 3)
+write.csv(as.data.frame(stanFit_freebayes5_HBD), "results/stan_models/freebayes5_HBD_model.csv")
+```
+
+
+```{r ROH_model check}
+
+#-------------------------#
+# Check MCMC Performance  #
+#-------------------------#
+print(stanFit_stacks001_F)
+stan_trace(stanFit_stacks001_F, pars = c("b0", "bIBC"), inc_warmup = TRUE)
+stan_trace(stanFit_stacks001_F, pars = "sigma", inc_warmup = TRUE)
+```
+
+``` {r plots}
+
+#-----------------------------------#
+#  Plot Results With Stan Functions #
+#-----------------------------------#
+stan_plot(stanFit_stacks001_F, par = c("b0", "bIBC"))
+stan_plot(stanFit_stacks001_F, par = "sigma")
+
+
+#-----------------------------------#
+#  Posterior Predictive Check 
+#  Extract Predicted Data           
+#-----------------------------------#
+
+#--- Extract the predictions ---#
+mcmcChains = as.data.frame(stanFit_stacks001_IR)
+chainLength = length(mcmcChains[, 1])
+
+zypred = matrix(0, ncol = N_stacks001_IR, nrow = chainLength)
+for (i in 1:N_stacks001_IR) {
+  zypred[, i] = mcmcChains[, paste("fitness_pred[", i, "]", sep = "")]
+}
+
+#--- Mean expected value for record ---#
+ypredMean = apply(zypred, 2, mean)
+
+#--- Upper and lower expected 95% HDI for each visit ---#
+ypredLow  = apply(zypred, 2, quantile, probs = 0.025)
+ypredHigh = apply(zypred, 2, quantile, probs = 0.975)
+
+#--- sorting mu_predicted results ---#
+
+zmu_pred = matrix(0, ncol = N_stacks001_IR , nrow = chainLength)
+zmu_pred[, i] = mcmcChains[, paste("mu_pred[", i, "]", sep = "")]
+
+#--- Mean expected value for record ---#
+mu_Mean = apply(zmu_pred, 2, mean)
+
+#--- Upper and lower expected 95% HDI for each sample in each population ---#
+mupredLow  = apply(zmu_pred, 2, quantile, probs = 0.025)
+mupredHigh = apply(zmu_pred, 2, quantile, probs = 0.975)
+
+
+```
+
+```{r bayesian_model_plots}
+#--- Load Data for Bayesian Plots ---#
+
+freebayes5_HBD_model_data <- read.csv("results/stan_models/freebayes5_HBD_model.csv")
+freebayes5_sMLH_model_data <- read.csv("results/stan_models/freebayes5_sMLH_model.csv")
+freebayes5_IR_model_data <- read.csv("/results/stan_models/freebayes5_IR_model.csv")
+freebayes5_HL_model_data <- read.csv("results/stan_models/freebayes5_HL_model.csv")
+freebayes5_F_model_data <- read.csv("results/stan_models/freebayes5_F_model.csv")
+
+freebayes10_HBD_model_data <- read.csv("results/stan_models/freebayes10_HBD_model.csv")
+freebayes10_sMLH_model_data <- read.csv("results/stan_models/freebayes10_sMLH_model.csv")
+freebayes10_IR_model_data <- read.csv("results/stan_models/freebayes10_IR_model.csv")
+freebayes10_HL_model_data <- read.csv("results/stan_models/freebayes10_HL_model.csv")
+freebayes10_F_model_data <- read.csv("results/stan_models/freebayes10_F_model.csv")
+
+stacks01_HBD_model_data <- read.csv("results/stan_models/stacks01_HBD_model.csv")
+stacks01_sMLH_model_data <- read.csv("results/stan_models/stacks01_sMLH_model.csv")
+stacks01_IR_model_data <- read.csv("results/stan_models/stacks01_IR_model.csv")
+stacks01_HL_model_data <- read.csv("results/stan_models/stacks01_HL_model.csv")
+stacks01_F_model_data <- read.csv("results/stan_models/stacks01_F_model.csv")
+
+stacks001_HBD_model_data <- read.csv("results/stan_models/stacks001_HBD_model.csv")
+stacks001_sMLH_model_data <- read.csv("results/stan_models/stacks001_sMLH_model.csv")
+stacks001_IR_model_data <- read.csv("results/stan_models/stacks001_IR_model.csv")
+stacks001_HL_model_data <- read.csv("results/stan_models/stacks001_HL_model.csv")
+stacks001_F_model_data <- read.csv("results/stan_models/stacks001_F_model.csv")
+```
+
+```{r Posterior_data}
+
+#--- Function to gather posteriors ---#
+gather_posteriors = function(df, IBC_metric, fitness){
+  N <- df %>% 
+    dplyr::select(starts_with("fitness",ignore.case = TRUE)) %>%
+    ncol()
+
+  b0 <- ((df$b0 * sd(fitness)) + mean(fitness) - ((df$bIBC * sd(fitness)) * (mean(IBC_metric)/sd(IBC_metric))))
+  bIBC <- df$bIBC * (sd(fitness)/sd(IBC_metric))
+
+  postPred1 = matrix (NA , nrow = 30000 , ncol = N)
+
+  for (i in 1:30000 ) {
+    for (j in 1:N) {
+      postPred1[i , j] = b0[i] + (bIBC[i] * IBC_metric[j])
+    }
+  }
+  
+  pred1Means <- apply(postPred1, 2, mean )
+  pred1Low <- apply(postPred1, 2, quantile , probs = 0.025)
+  pred1High <- apply(postPred1, 2 , quantile , probs = 0.975)
+  pred1Summary <<- data.frame(pred1Means, pred1Low, pred1High, fitness, IBC_metric)
+}
+
+#--- Run function on all 20 datasets ---#
+
+gather_posteriors(stacks001_HBD_model_data, stacks001_HBD, fitness_stacks001_HBD)
+stacks001_HBD_posteriors <- pred1Summary
+gather_posteriors(stacks001_IR_model_data, stacks001_IR, fitness_stacks001_IR)
+stacks001_IR_posteriors <- pred1Summary
+gather_posteriors(stacks001_HL_model_data, stacks001_HL, fitness_stacks001_HL)
+stacks001_HL_posteriors <- pred1Summary
+gather_posteriors(stacks001_F_model_data, stacks001_F, fitness_stacks001_F)
+stacks001_F_posteriors <- pred1Summary
+gather_posteriors(stacks001_sMLH_model_data, stacks001_sMLH, fitness_stacks001_sMLH)
+stacks001_sMLH_posteriors <- pred1Summary
+
+gather_posteriors(stacks01_HBD_model_data, stacks01_HBD, fitness_stacks01_HBD)
+stacks01_HBD_posteriors <- pred1Summary
+gather_posteriors(stacks01_IR_model_data, stacks01_IR, fitness_stacks01_IR)
+stacks01_IR_posteriors <- pred1Summary
+gather_posteriors(stacks01_HL_model_data, stacks01_HL, fitness_stacks01_HL)
+stacks01_HL_posteriors <- pred1Summary
+gather_posteriors(stacks01_F_model_data, stacks01_F, fitness_stacks01_F)
+stacks01_F_posteriors <- pred1Summary
+gather_posteriors(stacks01_sMLH_model_data, stacks01_sMLH, fitness_stacks01_sMLH)
+stacks01_sMLH_posteriors <- pred1Summary
+
+gather_posteriors(freebayes5_HBD_model_data, freebayes5_HBD, fitness_freebayes5_HBD)
+freebayes5_HBD_posteriors <- pred1Summary
+gather_posteriors(freebayes5_IR_model_data, freebayes5_IR, fitness_freebayes5_IR)
+freebayes5_IR_posteriors <- pred1Summary
+gather_posteriors(freebayes5_HL_model_data, freebayes5_HL, fitness_freebayes5_HL)
+freebayes5_HL_posteriors <- pred1Summary
+gather_posteriors(freebayes5_F_model_data, freebayes5_F, fitness_freebayes5_F)
+freebayes5_F_posteriors <- pred1Summary
+gather_posteriors(freebayes5_sMLH_model_data, freebayes5_sMLH, fitness_freebayes5_sMLH)
+freebayes5_sMLH_posteriors <- pred1Summary
+
+gather_posteriors(freebayes10_HBD_model_data, freebayes_HBD, fitness_freebayes_HBD)
+freebayes10_HBD_posteriors <- pred1Summary
+gather_posteriors(freebayes10_IR_model_data, freebayes_IR, fitness_freebayes_IR)
+freebayes10_IR_posteriors <- pred1Summary
+gather_posteriors(freebayes10_HL_model_data, freebayes_HL, fitness_freebayes_HL)
+freebayes10_HL_posteriors <- pred1Summary
+gather_posteriors(freebayes10_F_model_data, freebayes_F, fitness_freebayes_F)
+freebayes10_F_posteriors <- pred1Summary
+gather_posteriors(freebayes10_sMLH_model_data, freebayes_sMLH, fitness_freebayes_sMLH)
+freebayes10_sMLH_posteriors <- pred1Summary
+
+```
+
+```{r HBD plots}
+
+s001_HBD_bayesian <- ggplot(stacks001_HBD_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab(bquote(F['HBD>100Kb'])) +
+  ggtitle("D) Stacks 0.001")
+
+s01_HBD_bayesian <- ggplot(stacks01_HBD_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab(bquote(F['HBD>100Kb'])) +
+  ggtitle("C) Stacks 0.01")
+
+FBdp5_HBD_bayesian <- ggplot(freebayes5_HBD_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab(bquote(F['HBD>100Kb'])) +
+  ggtitle("A) Freebayes DP5")
+
+FBdp10_HBD_bayesian <- ggplot(freebayes10_HBD_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab(bquote(F['HBD>100Kb'])) +
+  ggtitle("B) Freebayes DP10")
+
+FBdp5_HBD_bayesian + FBdp10_HBD_bayesian + s01_HBD_bayesian + s001_HBD_bayesian
+```
+```{r F_plots}
+
+s001_F_bayesian <- ggplot(stacks001_F_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("F") +
+  ggtitle("D) Stacks 0.001")
+
+s01_F_bayesian <- ggplot(stacks01_F_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("F") +
+  ggtitle("C) Stacks 0.01")
+
+FBdp5_F_bayesian <- ggplot(freebayes5_F_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("F") +
+  ggtitle("A) Freebayes DP5")
+
+FBdp10_F_bayesian <- ggplot(freebayes10_F_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("F") +
+  ggtitle("B) Freebayes DP10")
+
+FBdp5_F_bayesian + FBdp10_F_bayesian + s01_F_bayesian + s001_F_bayesian
+```
+
+```{r HL_plots}
+
+s001_HL_bayesian <- ggplot(stacks001_HL_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("HL") +
+  ggtitle("D) Stacks 0.001")
+
+s01_HL_bayesian <- ggplot(stacks01_HL_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("HL") +
+  ggtitle("C) Stacks 0.01")
+
+FBdp5_HL_bayesian <- ggplot(freebayes5_HL_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("HL") +
+  ggtitle("A) Freebayes DP5")
+
+FBdp10_HL_bayesian <- ggplot(freebayes10_HL_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("HL") +
+  ggtitle("B) Freebayes DP10")
+
+FBdp5_HL_bayesian + FBdp10_HL_bayesian + s01_HL_bayesian + s001_HL_bayesian
+```
+
+```{r IR_plots}
+
+s001_IR_bayesian <- ggplot(stacks001_IR_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("IR") +
+  ggtitle("D) Stacks 0.001")
+
+s01_IR_bayesian <- ggplot(stacks01_IR_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("IR") +
+  ggtitle("C) Stacks 0.01")
+
+FBdp5_IR_bayesian <- ggplot(freebayes5_IR_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("IR") +
+  ggtitle("A) Freebayes DP5")
+
+FBdp10_IR_bayesian <- ggplot(freebayes10_IR_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("IR") +
+  ggtitle("B) Freebayes DP10")
+
+FBdp5_IR_bayesian + FBdp10_IR_bayesian + s01_IR_bayesian + s001_IR_bayesian
+```
+
+```{r F_plots}
+
+s001_sMLH_bayesian <- ggplot(stacks001_sMLH_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("sMLH") +
+  ggtitle("D) Stacks 0.001")
+
+s01_sMLH_bayesian <- ggplot(stacks01_sMLH_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("sMLH") +
+  ggtitle("C) Stacks 0.01")
+
+FBdp5_sMLH_bayesian <- ggplot(freebayes5_sMLH_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("sMLH") +
+  ggtitle("A) Freebayes DP5")
+
+FBdp10_sMLH_bayesian <- ggplot(freebayes10_sMLH_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("sMLH") +
+  ggtitle("B) Freebayes DP10")
+
+FBdp5_sMLH_bayesian + FBdp10_sMLH_bayesian + s01_sMLH_bayesian + s001_sMLH_bayesian
+```
+
+
+
+```{r Bayesian_5panel_s001_plots}
+
+single_s001_sMLH_bayesian <- ggplot(stacks001_sMLH_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("Standardized multilocus heterozygosity (sMLH)")
+
+single_s001_IR_bayesian <- ggplot(stacks001_IR_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("Internal Relatedness (IR)")
+
+single_s001_HL_bayesian <- ggplot(stacks001_HL_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("Homozygosity by Loci (HL)")
+
+single_s001_F_bayesian <- ggplot(stacks001_F_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab("F")
+
+single_s001_HBD_bayesian <- ggplot(stacks001_HBD_posteriors) +
+  theme_bw() +
+  geom_point(aes(x = IBC_metric, y = fitness ) , alpha = 0.8) +
+  geom_point(aes(x = IBC_metric, y = pred1Means) , colour = "darkslateblue", alpha = 0.5) +
+  geom_ribbon(aes(x = IBC_metric, ymin = pred1Low, ymax = pred1High), fill = "lightsteelblue" , alpha = 0.3) +
+  ylab("Mean Fecundity") +
+  xlab(bquote("Proportion of genome in HBD segments"~(F['HBD>100Kb'])))
+
+
+((single_s001_F_bayesian + theme(plot.tag.position  = c(.95,0.95))) + (single_s001_sMLH_bayesian + theme(plot.tag.position  = c(.95,0.95)))) / ((single_s001_HL_bayesian + theme(plot.tag.position  = c(.95,0.95))) + (single_s001_IR_bayesian + theme(plot.tag.position = c(.95,0.95)))) / (single_s001_HBD_bayesian + theme(plot.tag.position  = c(.95,0.95))) + plot_annotation(tag_level='a')
+
+```
+
