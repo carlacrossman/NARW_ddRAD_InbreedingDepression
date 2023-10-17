@@ -333,11 +333,9 @@ total_fecundity_contribution <- fecundity_by_year_6yr_min %>%
 
 
 
-###--- Subset females from study list ---###
+###--- Specify females from study list ---###
 
-# Remove seven individual females from the list where ddRADseq data was poor
-study_females <- ind_females %>%
-  filter(!(nea %in% c(3320, 3294, 1620, 1140, 1201, 2042, 3292)))
+study_females <- ind_females 
 
 
 ###--- Subset fecundity data for study samples only ---###
